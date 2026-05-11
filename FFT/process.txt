@@ -1,0 +1,92 @@
+create a new folder, name it fir_single_mac
+create a project inside that folder, name it fir_single_mac (or anything you want)
+choose the fpga to be cyclone 5 and device to be 5CSEBA6U23I7 
+inside the fir_single_mac folder, create src, data, ip, scripts folder.
+inside src create an rtl and tb folder
+make sure to run every script from the project root folder, not from anywhere else
+We are going to use Q(2, 14) (17 bits in total) format for everything
+
+inside src paste your fir filter implementation
+make sure that for hValues you wrote a python script which generates a module in src/rtl folder
+(I couldn't figure out how to use .mem files or any other way). store the script in scripts folder
+write a script to generate the signal data. The output of the final should be a .mif file.
+The output should be in the data folder. Make sure to keep sampling frequency to be 100kHz
+otherwise output is not proper. A specific format is to be followed, which is given below->
+
+    WIDTH=17; (size of the each data)
+    DEPTH=1000; (number of values)
+    ADDRESS_RADIX=UNS;
+    DATA_RADIX=HEX;
+    CONTENT BEGIN
+        0: data0
+        1: data1
+        ...
+    END;
+
+Make sure it generates three files for each frequency 900Hz, 1100Hz, 2000Hz
+Run the script, make sure the signal_xxx.mif files get generated in the data folder
+
+Create an IP of ROM 1-Port, make sure to store in the ip folder
+q bus (output) should be 17bits, and keep the depth to be 10000 (to store 10K samples)
+memory block and max block depth leave it as auto, and let it be single clock, click next
+keep the second one as it is and go to third one.
+In mem_init (third one) keep the name as datagen_rom, instance ID to be WAVE (can be random idk)
+click allow insystem memory content editor, for the file select one of the signal_xxx.mif files
+click finish. Check if the ip is in the project folder or not. add the ip to project files in quartus
+
+run the coeff_gen.py file and check if it generate the coeff_rom.v in the src/rtl folder or not
+Create a datagen module as a wrapper around the datagen_rom. The input of the this is clk, reset
+and next_sample enable. When the last signal is high and clk posedge comes it should send a new sample
+
+Now create a new wrapper around the filter implementation and datagen module. at each clock cycle,
+the filter sends a signal if it busy or not, if its not datagen will send a sample. filter processes
+this sample and sends the next. Keep a bunch of wires to get the output of filter
+The input of this wrapper is clk and an a KEY of wire [1:0] (used for reset and maps to i/o of fpga)
+make sure to use word (* keep *) for sample signal and output signal so that compiler wont optimise it
+keep the (* keep *) for sample ready signal as well
+
+Add all of these of these verilog files to project and set the complete wrapper (de10_nano_top) as top entity
+Compile once to check if everything is fine or not. Max frequency of fpga is 50Mhz.
+So write an sdc file so that clock period is 20ns and keep it project root folder (name is SDC1)
+Make sure the clock name matches with top module clock name. add the sdc file to project.
+
+after compiling open pin planner. In the location section keep ->
+Set key[0] (system wide reset) to PIN_AH17
+Set FPGA_CLK (the clock) to PIN_V11
+Make sure the I/O standard for these pins is set to 3.3 LVTTL (for whatever reason, it worked not questioning it)
+Compile again to check again is everything works or not.
+
+Connect DE10 Nano to the Laptop via USB Blaster port
+In quartus go to programmer in tools
+click autodetect, select the device name 5CSEBA6, click yes, two devices will be shown.
+right click the device 5CSEBA6 and select change file and select the .sof file from the output files folder
+click program/config box and press start, after the progress is 100% the conf_d led on board should light up
+close the window and save the changes. Run analysis and elaboration once.
+
+
+Create a new file of signal tap analyzer. A new window will open. alternatively go to signal tap analyzer in the tools
+Click the browse button (... button) near the Clock text on the right side of the window.
+Enlarge the newly open windowed (makes it easier to work with). click the button which points below near list button
+Set the filter to Signal Tap: pre-systhesis. keep it Named bar with * and press enter or click list
+double click your clock name in the top module, it should come on right side. click ok or press enter
+Right click anywhere on the black space in middle and select add nodes.
+Add your output signal on the right side, make sure that first thing you add is MSB, last is LSB in order
+click insert, and repeat same for input signal from datagen and ready signal.
+
+select all the wire related to input signal (can use shift) and right click and group them. do same for output signal
+Rename the group to whatever is needed (input_signal, output_signal). 
+Select sample depth (right side) to 8K, select the ready signal trigger condition to rising edge (better graph)
+
+On the top right corner, make sure the device is correct and hardware is DeSoc [3-2].
+Near the data section on the right, change storage qualifier type to input port, and select input port to ready signal.
+save the file and compile once again. after compilation go back to signal tap analyzer through tools.
+Near the sof manager click the browse button and upload the new .sof file
+Click the program device button just the button after the button on the left side of bar.
+It should show read to acquire on the top
+Select autosignal tap and click run analysis. A waveform will be generated.
+right click input signal, at last change the bus format to signed two's complement decimal.
+Do the same for output, go to files section adn export as comma separated .csv file. save it in data folder
+write a script to plot the values and then you are done.
+
+To change the data to different signals
+
