@@ -1,0 +1,1 @@
+Warning (10268): Verilog HDL information at fir_direct.v(73): always construct contains both blocking and non-blocking assignments File: C:/Users/kollu/dspquartus/direct_nonpipeline/fir_direct.v Line: 73
